@@ -83,7 +83,9 @@ std::string AES128Decrypt(const std::string &cipherText, const std::string &key,
 	}
 	catch (const Exception &e)
 	{
-		std::cerr << e.what() << std::endl;
+		std::ofstream &decryptLog = GetDecryptLog();
+		decryptLog << "decrypt video error:" << e.what() << std::endl;
+		std::cerr << "decrypt video error:" << e.what() << std::endl;
 		exit(1);
 	}
 	return plain;
@@ -312,6 +314,7 @@ void MergeClips(int end, const std::string &key, const std::string &iv)
 		ifs.close();
 	}
 	ofs.close();
+	decryptLog << "decrypt success" << std::endl;
 }
 
 int main(int argc, char *argv[])
