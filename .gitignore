@@ -30,3 +30,6 @@
 *.exe
 *.out
 *.app
+vc140.pdb
+/bin/*.log
+/bin/*.pdb

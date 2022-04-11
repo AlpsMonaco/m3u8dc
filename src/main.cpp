@@ -41,8 +41,18 @@
 
 using namespace CryptoPP;
 
-std::ofstream downloadLog("download.log", std::ios_base::trunc);
-std::ofstream encryptLog("encrypt.log", std::ios_base::trunc);
+std::ofstream &GetDownloadLog()
+{
+	static std::ofstream downloadLog("download.log", std::ios_base::trunc);
+	return downloadLog;
+}
+
+std::ofstream &GetDecryptLog()
+{
+	static std::ofstream decryptLog("decrypt.log", std::ios_base::trunc);
+	return decryptLog;
+}
+
 std::mutex logLock;
 
 std::string AES128Encrypt(const std::string &plain, const std::string &key, const std::string &iv)
@@ -112,12 +122,18 @@ std::string ProcessRaw(const char *raw)
 class OpenFileError : std::exception
 {
 public:
-	OpenFileError() {}
-	const char *what() const throw()
+	OpenFileError(const char *fileName)
 	{
-		return "open file failed";
+		info = "Open file error: ";
+		info += fileName;
 	}
+	const char *what() const throw() { return info.c_str(); }
+
+protected:
+	static std::string info;
 };
+
+std::string OpenFileError::info = "";
 
 class EmptyFileException : std::exception
 {
@@ -160,6 +176,7 @@ std::string GetFileName(const std::string &url)
 
 void DownloadClip(const std::string &url)
 {
+	std::ofstream &downloadLog = GetDownloadLog();
 	logLock.lock();
 	downloadLog << "downloading \"" << url << "\"" << std::endl;
 	std::cout << "downloading \"" << url << "\"" << std::endl;
@@ -206,12 +223,12 @@ void DownloadClip(const std::string &url)
 	}
 }
 
-std::vector<std::string> GetVideoClipsUrl()
+std::vector<std::string> GetVideoClipsUrl(const char *filePath)
 {
-	std::ifstream ifs("url.txt");
+	std::ifstream ifs(filePath);
 	if (!ifs.is_open())
 	{
-		throw OpenFileError();
+		throw OpenFileError(filePath);
 	}
 	std::string fileContent((std::istreambuf_iterator<char>(ifs)), (std::istreambuf_iterator<char>()));
 	static const char *crlf = "\r\n";
@@ -256,7 +273,7 @@ const char *GetRawKey()
 	constexpr char *fileName = "key.txt";
 	std::ifstream ifs(fileName, std::ios_base::binary);
 	if (!ifs.is_open())
-		throw OpenFileError();
+		throw OpenFileError(fileName);
 	rawKey.assign((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
 	return rawKey.c_str();
 }
@@ -267,23 +284,27 @@ const char *GetRawIV()
 	constexpr char *fileName = "iv.txt";
 	std::ifstream ifs(fileName, std::ios_base::binary);
 	if (!ifs.is_open())
-		throw OpenFileError();
+		throw OpenFileError(fileName);
 	rawIV.assign((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
 	return rawIV.c_str();
 }
 
 void MergeClips(int end, const std::string &key, const std::string &iv)
 {
-	std::ofstream ofs("result.ts", std::ios_base::binary | std::ios_base::trunc);
+	std::ofstream &decryptLog = GetDecryptLog();
+	static constexpr char *resultFileName = "result.m3u8";
+	std::ofstream ofs(resultFileName, std::ios_base::binary | std::ios_base::trunc);
 	if (!ofs.is_open())
-		throw OpenFileError();
+		throw OpenFileError(resultFileName);
+	decryptLog << "begin decrypt..." << std::endl;
 	std::ifstream ifs;
 	std::string buffer;
 	for (int i = 0; i <= end; i++)
 	{
-		ifs.open(std::to_string(i) + ".ts", std::ios_base::binary);
+		const std::string &tempFileName = std::to_string(i) + ".ts";
+		ifs.open(tempFileName, std::ios_base::binary);
 		if (!ifs.is_open())
-			throw OpenFileError();
+			throw OpenFileError(tempFileName.c_str());
 		buffer.assign((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
 		if (buffer.size() == 0)
 			throw EmptyFileException();
@@ -293,21 +314,26 @@ void MergeClips(int end, const std::string &key, const std::string &iv)
 	ofs.close();
 }
 
-// const char *rawKey = "[60, 248, 222, 224, 65, 78, 173, 48, 169, 249, 146, 188, 115, 54, 56, 36];";
-// const char *rawIV = "[19, 83, 149, 72, 66, 0, 200, 211, 81, 168, 61, 102, 72, 6, 44, 188]";
-
 int main(int argc, char *argv[])
 {
-#ifndef DECRYPTOR
-	std::atomic<size_t> count(0);
-	std::vector<std::string> list = GetVideoClipsUrl();
-	size_t end = list.size();
-	constexpr int threadNum = 5;
-	std::thread threadList[threadNum];
-	for (int i = 0; i < threadNum; i++)
+	try
 	{
-		threadList[i] = std::thread([&](int threadNo) -> void
-									{
+#ifndef DECRYPTOR
+		if (argc == 1)
+		{
+			std::cerr << "need m3u8 file";
+			return 1;
+		}
+		std::atomic<size_t> count(0);
+		std::vector<std::string> list;
+		list = GetVideoClipsUrl(argv[1]);
+		size_t end = list.size();
+		constexpr int threadNum = 5;
+		std::thread threadList[threadNum];
+		for (int i = 0; i < threadNum; i++)
+		{
+			threadList[i] = std::thread([&](int threadNo) -> void
+										{
 										logLock.lock();
 										std::cout << "thread(" << threadNo << ") begin"<< std::endl;
 										logLock.unlock();
@@ -322,21 +348,33 @@ int main(int argc, char *argv[])
 											return;
 										};
 										DownloadClip(list[num]);} },
-									i);
-	}
-	for (int i = 0; i < threadNum; i++)
-	{
-		threadList[i].join();
-	}
+										i);
+		}
+		for (int i = 0; i < threadNum; i++)
+		{
+			threadList[i].join();
+		}
 #else
-	if (argc == 1)
+		if (argc == 1)
+		{
+			std::cerr << "need end range" << std::endl;
+			return 1;
+		}
+		std::string key = GetKey(GetRawKey());
+		std::string iv = GetIV(GetRawIV());
+		MergeClips(atoi(argv[1]), key, iv);
+
+#endif
+	}
+	catch (OpenFileError &e)
 	{
-		std::cerr << "need end range" << std::endl;
+		std::cerr << e.what() << std::endl;
 		return 1;
 	}
-	std::string key = GetKey(GetRawKey());
-	std::string iv = GetIV(GetRawIV());
-	MergeClips(atoi(argv[1]), key, iv);
-#endif
+	catch (EmptyFileException &e)
+	{
+		std::cerr << e.what() << std::endl;
+		return 1;
+	}
 	return 0;
 }

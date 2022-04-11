@@ -1,0 +1,109 @@
+{
+    "tasks": [
+        {
+            "type": "cppbuild",
+            "label": "build downloader",
+            "command": "cl.exe",
+            "args": [
+                "/Zi",
+                "/EHsc",
+                "/nologo",
+                "/I",
+                "./thirdparty\\include",
+                "/Fe:",
+                "${workspaceFolder}\\bin\\downloader.exe",
+                "src\\main.cpp",
+                "cryptlib.lib",
+                "/link",
+                "/libpath:${workspaceFolder}\\thirdparty\\lib",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "调试器生成的任务。"
+        },
+        {
+            "type": "cppbuild",
+            "label": "build decryptor",
+            "command": "cl.exe",
+            "args": [
+                "/Zi",
+                "/EHsc",
+                "/nologo",
+                "/D",
+                "DECRYPTOR",
+                "/I",
+                "./thirdparty\\include",
+                "/Fe:",
+                "${workspaceFolder}\\bin\\decryptor.exe",
+                "src\\main.cpp",
+                "cryptlib.lib",
+                "/link",
+                "/libpath:${workspaceFolder}\\thirdparty\\lib",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "调试器生成的任务。"
+        },
+        {
+            "type": "cppbuild",
+            "label": "release downloader",
+            "command": "cl.exe",
+            "args": [
+                "/EHsc",
+                "/nologo",
+                "/Ox",
+                "/I",
+                "./thirdparty\\include",
+                "/Fe:",
+                "${workspaceFolder}\\bin\\downloader.exe",
+                "src\\main.cpp",
+                "cryptlib.lib",
+                "/link",
+                "/libpath:${workspaceFolder}\\thirdparty\\lib",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "调试器生成的任务。"
+        },
+        {
+            "type": "cppbuild",
+            "label": "release decryptor",
+            "command": "cl.exe",
+            "args": [
+                "/EHsc",
+                "/nologo",
+                "/Ox",
+                "/D",
+                "DECRYPTOR",
+                "/I",
+                "./thirdparty\\include",
+                "/Fe:",
+                "${workspaceFolder}\\bin\\decryptor.exe",
+                "src\\main.cpp",
+                "cryptlib.lib",
+                "/link",
+                "/libpath:${workspaceFolder}\\thirdparty\\lib",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "调试器生成的任务。"
+        }
+    ],
+    "version": "2.0.0"
+}
