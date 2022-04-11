@@ -121,7 +121,7 @@ std::string ProcessRaw(const char *raw)
 	return result;
 }
 
-class OpenFileError : std::exception
+class OpenFileError : public std::exception
 {
 public:
 	OpenFileError(const char *fileName)
@@ -137,7 +137,7 @@ protected:
 
 std::string OpenFileError::info = "";
 
-class EmptyFileException : std::exception
+class EmptyFileException : public std::exception
 {
 public:
 	EmptyFileException() {}
@@ -369,12 +369,7 @@ int main(int argc, char *argv[])
 
 #endif
 	}
-	catch (OpenFileError &e)
-	{
-		std::cerr << e.what() << std::endl;
-		return 1;
-	}
-	catch (EmptyFileException &e)
+	catch (std::exception &e)
 	{
 		std::cerr << e.what() << std::endl;
 		return 1;
