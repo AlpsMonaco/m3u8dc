@@ -35,3 +35,4 @@ vc140.pdb
 /bin/*.pdb
 *.ts
 /lesson
+/bin/*.ilk

@@ -492,6 +492,28 @@ void Download(const std::vector<std::string> &list, HistoryMgr &historyMgr)
 		threadList[i].join();
 }
 
+std::string ParseDecryptObject(const rapidjson::Value &obj)
+{
+	std::string result;
+	if (obj.IsArray())
+	{
+		for (int i = 0; i < obj.Size(); i++)
+			result += static_cast<const char>(obj[i].GetInt());
+	}
+	if (obj.IsObject())
+	{
+		int i = 0;
+		for (;;)
+		{
+			std::string index = std::to_string(i++);
+			if (!obj.HasMember(index.c_str()))
+				break;
+			result += static_cast<const char>(obj[index.c_str()].GetInt());
+		}
+	}
+	return result;
+}
+
 int main(int argc, char **argv)
 {
 	if (argc != 3)
@@ -499,9 +521,9 @@ int main(int argc, char **argv)
 		PrintHelp();
 		return 1;
 	}
+	HistoryMgr historyMgr;
 	try
 	{
-		HistoryMgr historyMgr;
 		std::vector<std::string> list;
 		list = GetVideoClipsUrl(argv[1]);
 		Download(list, historyMgr);
@@ -519,27 +541,26 @@ int main(int argc, char **argv)
 		if (d.HasParseError())
 		{
 			std::cerr << std::string("parse json file") + argv[2] + "failed" << std::endl;
+			historyMgr.Save();
 			return 1;
 		}
-		if (!d.HasMember("key") || !d["key"].IsArray() || !d.HasMember("iv") || !d["iv"].IsArray())
+		if (!d.HasMember("key") || !d.HasMember("iv"))
 		{
 			std::cerr << "key or iv is not array" << std::endl;
+			historyMgr.Save();
 			return 1;
 		}
 		const rapidjson::Value &keyArray = d["key"];
-		std::string key(keyArray.Size(), '\0');
-		for (int i = 0; i < keyArray.Size(); i++)
-			key[i] = keyArray[i].GetInt();
+		std::string key(ParseDecryptObject(keyArray));
 		const rapidjson::Value &ivArray = d["iv"];
-		std::string iv(ivArray.Size(), '\0');
-		for (int i = 0; i < ivArray.Size(); i++)
-			iv[i] = ivArray[i].GetInt();
+		std::string iv(ParseDecryptObject(ivArray));
 		MergeClips(list.size() - 1, key, iv);
 		historyMgr.Save();
 		return 0;
 	}
 	catch (std::exception &e)
 	{
+		historyMgr.Save();
 		std::cerr << e.what() << std::endl;
 		return -1;
 	}
