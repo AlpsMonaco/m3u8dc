@@ -74,6 +74,7 @@
 		"csignal": "cpp",
 		"random": "cpp",
 		"regex": "cpp",
-		"set": "cpp"
+		"set": "cpp",
+		"shared_mutex": "cpp"
 	}
 }

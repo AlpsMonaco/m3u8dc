@@ -2,12 +2,64 @@
     "tasks": [
         {
             "type": "cppbuild",
+            "label": "build m3u8dc",
+            "command": "cl.exe",
+            "args": [
+                "/Zi",
+                "/EHsc",
+                "/nologo",
+                "/I",
+                "./thirdparty\\include",
+                "/Fe:",
+                "${workspaceFolder}\\bin\\m3u8dc.exe",
+                "src\\main.cpp",
+                "cryptlib.lib",
+                "/link",
+                "/libpath:${workspaceFolder}\\thirdparty\\lib",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "调试器生成的任务。"
+        },
+        {
+            "type": "cppbuild",
+            "label": "release m3u8dc",
+            "command": "cl.exe",
+            "args": [
+                "/EHsc",
+                "/nologo",
+                "/Ox",
+                "/I",
+                "./thirdparty\\include",
+                "/Fe:",
+                "${workspaceFolder}\\bin\\m3u8dc.exe",
+                "src\\main.cpp",
+                "cryptlib.lib",
+                "/link",
+                "/libpath:${workspaceFolder}\\thirdparty\\lib",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": [
+                "$msCompile"
+            ],
+            "detail": "调试器生成的任务。"
+        },
+        {
+            "type": "cppbuild",
             "label": "build downloader",
             "command": "cl.exe",
             "args": [
                 "/Zi",
                 "/EHsc",
                 "/nologo",
+                "/D",
+                "_SPLIT_FEATURES_",
                 "/I",
                 "./thirdparty\\include",
                 "/Fe:",
@@ -34,6 +86,8 @@
                 "/EHsc",
                 "/nologo",
                 "/D",
+                "_SPLIT_FEATURES_",
+                "/D",
                 "DECRYPTOR",
                 "/I",
                 "./thirdparty\\include",
@@ -59,6 +113,8 @@
             "args": [
                 "/EHsc",
                 "/nologo",
+                "/D",
+                "_SPLIT_FEATURES_",
                 "/Ox",
                 "/I",
                 "./thirdparty\\include",
@@ -84,6 +140,8 @@
             "args": [
                 "/EHsc",
                 "/nologo",
+                "/D",
+                "_SPLIT_FEATURES_",
                 "/Ox",
                 "/D",
                 "DECRYPTOR",

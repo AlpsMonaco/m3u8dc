@@ -15,6 +15,7 @@
 #include <thread>
 #include <atomic>
 #include <mutex>
+#include <shared_mutex>
 
 #define CPPHTTPLIB_OPENSSL_SUPPORT
 
@@ -141,11 +142,23 @@ class EmptyFileException : public std::exception
 {
 public:
 	EmptyFileException() {}
-	const char *what() const throw()
-	{
-		return "file is empty";
-	}
+	const char *what() const throw() { return "file is empty"; }
 };
+
+class KeyNotFoundException : public std::exception
+{
+public:
+	KeyNotFoundException(const char *key)
+	{
+		this->info = key;
+		this->info += " not found";
+	}
+	const char *what() const throw() { return this->info.c_str(); }
+
+protected:
+	static std::string info;
+};
+std::string KeyNotFoundException::info = "";
 
 httplib::Headers &GetHeaders()
 {
@@ -176,7 +189,7 @@ std::string GetFileName(const std::string &url)
 	return url.substr(beginPos, endPos - beginPos);
 }
 
-void DownloadClip(const std::string &url)
+bool DownloadClip(const std::string &url)
 {
 	std::ofstream &downloadLog = GetDownloadLog();
 	logLock.lock();
@@ -203,25 +216,36 @@ void DownloadClip(const std::string &url)
 		}
 	}
 	std::string fileName = GetFileName(url);
-	httplib::SSLClient c(host);
-	c.set_read_timeout(30);
-	auto result = c.Get(endpoint.c_str(), GetHeaders());
-	if (result.error() != httplib::Error::Success)
+	constexpr int maxTryCount = 10;
+	int tryCount = 0;
+	for (;;)
 	{
-		logLock.lock();
-		downloadLog << "download error:" << httplib::to_string(result.error()) << url << std::endl;
-		std::cout << "download error:" << httplib::to_string(result.error()) << url << std::endl;
-		logLock.unlock();
-	}
-	else
-	{
-		std::ofstream ofs(fileName + ".ts", std::ios_base::binary | std::ios_base::trunc);
-		ofs << result.value().body;
-		ofs.close();
-		logLock.lock();
-		downloadLog << "download \"" << url << "\" finish" << std::endl;
-		std::cout << "download \"" << url << "\" finish" << std::endl;
-		logLock.unlock();
+		tryCount++;
+		httplib::SSLClient c(host);
+		c.set_read_timeout(30);
+		auto result = c.Get(endpoint.c_str(), GetHeaders());
+		if (result.error() != httplib::Error::Success)
+		{
+			if (tryCount <= maxTryCount)
+				continue;
+			else
+				return false;
+			logLock.lock();
+			downloadLog << "download error:" << httplib::to_string(result.error()) << url << std::endl;
+			std::cout << "download error:" << httplib::to_string(result.error()) << url << std::endl;
+			logLock.unlock();
+		}
+		else
+		{
+			std::ofstream ofs(fileName + ".ts", std::ios_base::binary | std::ios_base::trunc);
+			ofs << result.value().body;
+			ofs.close();
+			logLock.lock();
+			downloadLog << "download success:\"" << url << std::endl;
+			std::cout << "download success:\"" << url << std::endl;
+			logLock.unlock();
+			return true;
+		}
 	}
 }
 
@@ -317,6 +341,213 @@ void MergeClips(int end, const std::string &key, const std::string &iv)
 	decryptLog << "decrypt success" << std::endl;
 }
 
+/**
+ * @brief m3u8dc.exe <m3u8_file> <key_with_iv.json>
+ * @param m3u8_file m3u8 standard format
+ * @param key_with_iv_file {"key":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], "iv":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}
+ */
+
+#ifndef _SPLIT_FEATURES_
+
+#include "rapidjson/document.h"
+#include "rapidjson/stringbuffer.h"
+#include "rapidjson/writer.h"
+
+class HistoryMgr
+{
+public:
+	/**
+	 * history.json {"history":[0,1,2,3]}
+	 */
+	HistoryMgr()
+	{
+		std::ifstream ifs("history.json", std::ios_base::binary);
+		if (ifs.is_open())
+		{
+			std::string historyContent((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+			d.Parse(historyContent.c_str());
+			ifs.close();
+			if (d.HasParseError())
+			{
+				std::cerr << "parse history.json error" << std::endl;
+				return;
+			}
+			if (!d.HasMember("history"))
+			{
+				std::cerr << "history.json has no history" << std::endl;
+				return;
+			}
+			const rapidjson::Value &history = d["history"];
+			if (!history.IsArray())
+			{
+				std::cerr << "history.json history is not array" << std::endl;
+				return;
+			}
+			for (rapidjson::SizeType i = 0; i < history.Size(); i++)
+			{
+				if (!history[i].IsInt())
+				{
+					std::cerr << "a value is not int" << std::endl;
+					continue;
+				}
+				historySet.emplace(history[i].GetInt());
+			}
+		}
+	}
+
+	bool IsExist(int index)
+	{
+		this->mu.lock_shared();
+		bool result = historySet.find(index) != historySet.end();
+		this->mu.unlock_shared();
+		return result;
+	}
+
+	void Add(int index)
+	{
+		this->mu.lock();
+		historySet.emplace(index);
+		this->mu.unlock();
+	}
+
+	void Save()
+	{
+		this->mu.lock();
+		d.SetObject();
+		rapidjson::Value history(rapidjson::kArrayType);
+		for (const auto &i : historySet)
+		{
+			rapidjson::Value v(i);
+			history.PushBack(v, d.GetAllocator());
+		}
+		d.AddMember("history", history, d.GetAllocator());
+		std::ofstream ofs("history.json", std::ios_base::binary | std::ios_base::trunc);
+		if (!ofs.is_open())
+		{
+			std::cerr << "open history.json error" << std::endl;
+			this->mu.unlock();
+			return;
+		}
+		rapidjson::StringBuffer buffer;
+		rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+		d.Accept(writer);
+		ofs << buffer.GetString();
+		ofs.close();
+		this->mu.unlock();
+	}
+
+protected:
+	std::shared_mutex mu;
+	std::set<long long> historySet;
+	rapidjson::Document d;
+};
+
+void PrintHelp()
+{
+	std::cout << R"( usage m3u8dc.exe <m3u8_file> <key_with_iv.json>
+
+ m3u8_file a m3u8 file with standard m3u8 format
+
+ key_with_iv_file a json file contains {"key":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], "iv":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]})"
+			  << std::endl;
+}
+
+void Download(const std::vector<std::string> &list, HistoryMgr &historyMgr)
+{
+	std::atomic<size_t> count(0);
+	size_t end = list.size();
+	constexpr int threadNum = 5;
+	std::thread threadList[threadNum];
+	for (int i = 0; i < threadNum; i++)
+	{
+		threadList[i] = std::thread([&](int threadNo) -> void
+									{
+										logLock.lock();
+										std::cout << "thread(" << threadNo << ") begin"<< std::endl;
+										logLock.unlock();
+										size_t num;
+										for(;;){
+										num = count++;
+										if(num >=end)
+										{
+											logLock.lock();
+											std::cout << "thread(" << threadNo << ") exit"<< std::endl;
+											logLock.unlock();
+											return;
+										};
+										if(historyMgr.IsExist(num))
+										{
+											logLock.lock();
+											std::cout << "clip " << num << " downloaded,skip..." << std::endl;
+											GetDownloadLog() << "clip " << num << " downloaded,skip..." << std::endl;
+											logLock.unlock();
+											continue;
+										}
+										DownloadClip(list[num]);
+										historyMgr.Add(num);
+										} },
+									i);
+	}
+	for (int i = 0; i < threadNum; i++)
+		threadList[i].join();
+}
+
+int main(int argc, char **argv)
+{
+	if (argc != 3)
+	{
+		PrintHelp();
+		return 1;
+	}
+	try
+	{
+		HistoryMgr historyMgr;
+		std::vector<std::string> list;
+		list = GetVideoClipsUrl(argv[1]);
+		Download(list, historyMgr);
+
+		rapidjson::Document d;
+		std::ifstream ifs(argv[2], std::ios_base::binary);
+		if (!ifs.is_open())
+			throw OpenFileError(argv[2]);
+
+		std::string keyWithIv((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+		ifs.close();
+		if (keyWithIv.size() == 0)
+			throw EmptyFileException();
+		d.Parse(keyWithIv.c_str());
+		if (d.HasParseError())
+		{
+			std::cerr << std::string("parse json file") + argv[2] + "failed" << std::endl;
+			return 1;
+		}
+		if (!d.HasMember("key") || !d["key"].IsArray() || !d.HasMember("iv") || !d["iv"].IsArray())
+		{
+			std::cerr << "key or iv is not array" << std::endl;
+			return 1;
+		}
+		const rapidjson::Value &keyArray = d["key"];
+		std::string key(keyArray.Size(), '\0');
+		for (int i = 0; i < keyArray.Size(); i++)
+			key[i] = keyArray[i].GetInt();
+		const rapidjson::Value &ivArray = d["iv"];
+		std::string iv(ivArray.Size(), '\0');
+		for (int i = 0; i < ivArray.Size(); i++)
+			iv[i] = ivArray[i].GetInt();
+		MergeClips(list.size() - 1, key, iv);
+		historyMgr.Save();
+		return 0;
+	}
+	catch (std::exception &e)
+	{
+		std::cerr << e.what() << std::endl;
+		return -1;
+	}
+	return 0;
+}
+
+#else
+
 int main(int argc, char *argv[])
 {
 	try
@@ -376,3 +607,5 @@ int main(int argc, char *argv[])
 	}
 	return 0;
 }
+
+#endif

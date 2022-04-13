@@ -2,6 +2,18 @@
 a m3u8 downloader and decryptor
 
 
+# MAIN
+## m3u8dc
+### usage
+```m3u8dc.exe <m3u8_file> <key_with_iv.json>```  
+```usage m3u8dc.exe <m3u8_file> <key_with_iv.json>```  
+```m3u8_file a m3u8 file with standard m3u8 format```  
+```key_with_iv_file a json file contains```  
+```{"key":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], "iv":[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]}```  
+
+
+# EXTRA
+
 ## downloader
 ### usage
 downloader.exe [filepath]  

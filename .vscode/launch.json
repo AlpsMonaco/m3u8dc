@@ -8,10 +8,10 @@
 			"name": "debug downloader",
 			"type": "cppvsdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/downloader.exe",
+			"program": "${workspaceFolder}//bin//downloader.exe",
 			"args": [],
 			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
+			"cwd": "${workspaceFolder}\\bin",
 			"environment": [],
 			"console": "externalTerminal",
 			"preLaunchTask": "build downloader"
@@ -20,13 +20,26 @@
 			"name": "debug decryptor",
 			"type": "cppvsdbg",
 			"request": "launch",
-			"program": "${workspaceFolder}/decryptor.exe",
+			"program": "${workspaceFolder}//bin//decryptor.exe",
 			"args": [],
 			"stopAtEntry": false,
-			"cwd": "${workspaceFolder}",
+			"cwd": "${workspaceFolder}\\bin",
 			"environment": [],
 			"console": "externalTerminal",
 			"preLaunchTask": "build decryptor"
-		}
+		},
+		{
+			"name": "debug m3u8dc",
+			"type": "cppvsdbg",
+			"request": "launch",
+			"program": "${workspaceFolder}//bin//m3u8dc.exe",
+			"args": ["lesson.m3u8","key.json"],
+			"stopAtEntry": false,
+			"cwd": "${workspaceFolder}\\bin",
+			"environment": [],
+			"console": "externalTerminal",
+			"preLaunchTask": "build m3u8dc"
+		},
+		
 	]
 }
